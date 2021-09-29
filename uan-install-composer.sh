@@ -82,7 +82,7 @@ function summarize_uans() {
     # BOS/CFS/IMS info
     BOS_SESSION_ID=$(jq -r --arg uan "$uan" '.[] | select(.hosts != null) | select(.hosts[] | contains($uan)) | .params' bss_bootparameters.json | tr ' ' '\n' | grep bos_session_id | cut -f2 -d=)
     if [ ! -z "$BOS_SESSION_ID" ]; then
-      BOS_SESSION_NAME=$(cray bos session describe $BOS_SESSION_ID | jq -r ".templateUuid")
+      BOS_SESSION_NAME=$(cray bos session describe $BOS_SESSION_ID 2> /dev/null | jq -r ".templateUuid")
     fi
     if [[ "$BOS_SESSION_NAME" == "" ]]; then
       BOS_SESSION_NAME="Unknown"
