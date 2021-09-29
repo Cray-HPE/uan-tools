@@ -56,7 +56,7 @@ function summarize_uans() {
 
   for uan in $UANS; do
     SERVER_INFO=$(cray hsm inventory hardware list | jq --arg uan "$uan" -r '.[] | select(.ID == $uan) | .PopulatedFRU.NodeFRUInfo.Model')
-    PROCESSOR_INFO=$(cray hsm inventory hardware list | jq -r '.[] | select(.ID == "x3000c0s24b0n0p0") | .PopulatedFRU.ProcessorFRUInfo.Model')
+    PROCESSOR_INFO=$(cray hsm inventory hardware list | jq --arg uan "$uan" -r '.[] | select(.ID == $uan) | .PopulatedFRU.ProcessorFRUInfo.Model')
     echo "UAN: $uan\tServer Type:$SERVER_INFO\tProcessor Type:$PROCESSOR_INFO"
   done
   echo ""
