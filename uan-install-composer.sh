@@ -46,13 +46,17 @@ function summarize_artifacts() {
 }
 
 function summarize_uans() {
+
+  cray hsm state components list --role Application --subrole UAN --format json > hsm_component.json
+  cray hsm inventory hardware list > hsm_hardware.json
+
   echo "UAN HSM State Summary..."
-  cray hsm state components list --role Application --subrole UAN --format json | jq -c '.Components[] | {ID, State}' | sort
+  jq -c '.Components[] | {ID, State}' hsm_component.json | sort
   echo ""
 
 
   echo "UAN HSM Summary..."
-  UANS=$(cray hsm state components list --role Application --subrole UAN --format json | jq -r '.Components[] | .ID' | sort)
+  UANS=$(jq -r '.Components[] | .ID' hsm_component.json | sort)
 
   for uan in $UANS; do
     SERVER_INFO=$(cray hsm inventory hardware list | jq --arg uan "$uan" -r '.[] | select(.ID == $uan) | .PopulatedFRU.NodeFRUInfo.Model')
