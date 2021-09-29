@@ -6,7 +6,8 @@ for system in $(cray config list | jq -r '.configurations[] | .name'); do
     continue
   fi
 
-  echo "$system UAN status"
-
+  echo "### $system ###"
   uan-install-composer.sh -a $system -u
+  echo ""
+
 done

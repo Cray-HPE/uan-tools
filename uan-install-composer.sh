@@ -49,40 +49,55 @@ function summarize_uans() {
 
   cray hsm state components list --role Application --subrole UAN --format json > hsm_component.json
   cray hsm inventory hardware list > hsm_hardware.json
+  cray bss bootparameters list > bss_bootparameters.json
+  cray sls networks describe CAN > sls_can.json
 
-  echo "UAN HSM State Summary..."
-  jq -c '.Components[] | {ID, State}' hsm_component.json | sort
-  echo ""
-
-
-  echo "UAN HSM Summary..."
+  echo "UAN|State|Server|Processor|SLS CAN IP|SLS Name|BOS Name||CFS Config|IMS Image" >> uan_info_table.txt
   UANS=$(jq -r '.Components[] | .ID' hsm_component.json | sort)
-
   for uan in $UANS; do
-    SERVER_INFO=$(cray hsm inventory hardware list | jq --arg uan "$uan" -r '.[] | select(.ID == $uan) | .PopulatedFRU.NodeFRUInfo.Model')
-    processor_xname="$uan"p0
-    PROCESSOR_INFO=$(cray hsm inventory hardware list | jq --arg processor_xname "$processor_xname" -r '.[] | select(.ID == $processor_xname) | .PopulatedFRU.ProcessorFRUInfo.Model')
-    echo "UAN: $uan\tServer Type:$SERVER_INFO\tProcessor Type:$PROCESSOR_INFO"
-  done
-  echo ""
+    # HSM State
+    HSM_STATE=$(jq -r -c --arg uan "$uan" '.Components[] | select(.ID == $uan) | .State' hsm_component.json)
 
-  for uan in $UANS; do
-    BOS_SESSION_ID=$(cray bss bootparameters list | jq -r --arg uan "$uan" '.[] | select(.hosts != null) | select(.hosts[] | contains($uan)) | .params' | tr ' ' '\n' | grep bos_session_id | cut -f2 -d=)
-    BOS_SESSION_NAME=$(cray bos session describe $BOS_SESSION_ID | jq -r ".templateUuid")
-    if [ -z $BOS_SESSION_NAME ]; then
-      echo "Could not find BOS Session NAME for $uan"
-      continue
+    # Hardware info
+    SERVER_INFO=$(jq --arg uan "$uan" -r '.[] | select(.ID == $uan) | .PopulatedFRU.NodeFRUInfo.Model' hsm_hardware.json)
+    if [[ "$SERVER_INFO" == "" ]]; then
+      SERVER_INFO="Unknown"
     fi
-    CFS_CONFIGURATION=$(cray bos sessiontemplate describe $BOS_SESSION_NAME | jq -r '.cfs.configuration')
-    IMS_IMAGE_ID=$(cray bss bootparameters list | jq --arg uan "$uan" -r '.[] | select(.hosts != null) | select(.hosts[] | contains($uan)) | .params' | tr ' ' '\n' | grep bos_session_id | cut -f2 -d=)
-    echo "UAN: $uan\tBOS Name: $BOS_SESSION_NAME\tCFS Config: $CFS_CONFIGURATION\tIMS Image: $IMS_IMAGE_ID"
-  done
-  echo ""
+    processor_xname="$uan"p0
+    PROCESSOR_INFO=$(jq --arg processor_xname "$processor_xname" -r '.[] | select(.ID == $processor_xname) | .PopulatedFRU.ProcessorFRUInfo.Model' hsm_hardware.json)
+    if [[ "$PROCESSOR_INFO" == "" ]]; then
+      PROCESSOR_INFO="Unknown"
+    fi
 
-  echo "UAN SLS Summary..."
-  for uan in $UANS; do
-    cray sls networks describe CAN | jq --arg uan "$uan" '.ExtraProperties.Subnets[] | select(.FullName == "CAN Bootstrap DHCP Subnet") | .IPReservations[] | select(.Comment != null) | select(.Comment | contains($uan))'
+    # SLS info
+    SLS_CAN_IP=$(jq -r --arg uan "$uan" '.ExtraProperties.Subnets[] | select(.FullName == "CAN Bootstrap DHCP Subnet") | .IPReservations[] | select(.Comment != null) | select(.Comment | contains($uan)) | .IPAddress' sls_can.json | uniq | tr '\n' ' ')
+    if [[ "$SLS_CAN_IP" == "" ]]; then
+      SLS_CAN_IP = "Unknown"
+    fi
+    SLS_NAME=$(jq -r --arg uan "$uan" '.ExtraProperties.Subnets[] | select(.FullName == "CAN Bootstrap DHCP Subnet") | .IPReservations[] | select(.Comment != null) | select(.Comment | contains($uan)) | .Name' sls_can.json | tr '\n' ' ')
+    if [[ "$SLS_NAME" == "" ]]; then
+      SLS_NAME = "Unknown"
+    fi
+
+    # BOS/CFS/IMS info
+    BOS_SESSION_ID=$(jq -r --arg uan "$uan" '.[] | select(.hosts != null) | select(.hosts[] | contains($uan)) | .params' bss_bootparameters.json | tr ' ' '\n' | grep bos_session_id | cut -f2 -d=)
+    if [ ! -z "$BOS_SESSION_ID" ]; then
+      BOS_SESSION_NAME=$(cray bos session describe $BOS_SESSION_ID | jq -r ".templateUuid")
+    fi
+    if [[ "$BOS_SESSION_NAME" == "" ]]; then
+      BOS_SESSION_NAME="Unknown"
+      CFS_CONFIGURATION="Unknown"
+      IMS_IMAGE_ID="Unknown"
+    else
+      CFS_CONFIGURATION=$(cray bos sessiontemplate describe $BOS_SESSION_NAME | jq -r '.cfs.configuration')
+      IMS_IMAGE_ID=$(jq --arg uan "$uan" -r '.[] | select(.hosts != null) | select(.hosts[] | contains($uan)) | .params' bss_bootparameters.json | tr ' ' '\n' | grep bos_session_id | cut -f2 -d=)
+    fi
+
+    echo "$uan|$HSM_STATE|$SERVER_INFO|$PROCESSOR_INFO|$SLS_CAN_IP|$SLS_NAME|$BOS_SESSION_NAME|$CFS_CONFIGURATION|$IMS_IMAGE_ID" >> uan_info_table.txt
+    unset HSM_STATE SERVER_INFO PROCESSOR_INFO SLS_CAN_IP SLS_NAME BOS_SESSION_ID BOS_SESSION_NAME CFS_CONFIGURATION IMS_IMAGE_ID
   done
+  column -s"|" -t uan_info_table.txt
+  rm uan_info_table.txt
 }
 
 function ims_helper() {
@@ -274,7 +289,12 @@ fi
 
 if cray uas mgr-info list 2>&1 | egrep --silent "Token not valid for UAS|401|403"; then
   echo "cray auth login --username $USER..."
-  cray auth login
+  cray auth login --username $USER
+fi
+
+if cray uas mgr-info list 2>&1 | egrep --silent "Error: Error received from server: 404 Not Found"; then
+  echo "API requests return 404"
+  exit 1
 fi
 
 # Reset getopts index to process the remaining args
