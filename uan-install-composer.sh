@@ -56,7 +56,8 @@ function summarize_uans() {
 
   for uan in $UANS; do
     SERVER_INFO=$(cray hsm inventory hardware list | jq --arg uan "$uan" -r '.[] | select(.ID == $uan) | .PopulatedFRU.NodeFRUInfo.Model')
-    PROCESSOR_INFO=$(cray hsm inventory hardware list | jq --arg uan "$uan" -r '.[] | select(.ID == $uan) | .PopulatedFRU.ProcessorFRUInfo.Model')
+    processor_xname="$uan"p0
+    PROCESSOR_INFO=$(cray hsm inventory hardware list | jq --arg processor_xname "$processor_xname" -r '.[] | select(.ID == $processor_xname) | .PopulatedFRU.ProcessorFRUInfo.Model')
     echo "UAN: $uan\tServer Type:$SERVER_INFO\tProcessor Type:$PROCESSOR_INFO"
   done
   echo ""
@@ -78,7 +79,6 @@ function summarize_uans() {
   for uan in $UANS; do
     cray sls networks describe CAN | jq --arg uan "$uan" '.ExtraProperties.Subnets[] | select(.FullName == "CAN Bootstrap DHCP Subnet") | .IPReservations[] | select(.Comment != null) | select(.Comment | contains($uan))'
   done
-    
 }
 
 function ims_helper() {
