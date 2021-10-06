@@ -271,9 +271,9 @@ while getopts "hx:va:suicbBCpg" arg; do
       set -x
       ;;
     a)
-      APIGW=$OPTARG
-      if cray config use $APIGW 2>&1 | egrep --silent "Unable to find configuration file"; then
-        echo "Could not find craycli configuration: $APIGW"
+      API_GW=$OPTARG
+      if cray config use $API_GW 2>&1 | egrep --silent "Unable to find configuration file"; then
+        echo "Could not find craycli configuration: $API_GW"
         echo "valid configurations are: "
         cray config list | jq -r '.configurations[] | .name'
         exit 1
@@ -282,16 +282,26 @@ while getopts "hx:va:suicbBCpg" arg; do
   esac
 done
 
+# Verify the API Gateway is responding...
+API_GW_HOST=$(cray config get core.hostname | sed 's/https:\/\///')
+if ! ping -c1 -W3000 $API_GW_HOST > /dev/null; then
+  echo "Could not ping $API_GW_HOST"
+  exit 1
+fi
+
+# Check if a Cray CLI configuration exists...
 if cray uas mgr-info list 2>&1 | egrep --silent "Error: No configuration exists"; then
   echo "cray init..."
   cray init
 fi
 
+# Check if Cray CLI has a valid authentication token...
 if cray uas mgr-info list 2>&1 | egrep --silent "Token not valid for UAS|401|403"; then
   echo "cray auth login --username $USER..."
   cray auth login --username $USER
 fi
 
+# Check for a corner case where the API Gateway is returning a 404
 if cray uas mgr-info list 2>&1 | egrep --silent "Error: Error received from server: 404 Not Found"; then
   echo "API requests return 404"
   exit 1
