@@ -72,11 +72,11 @@ function summarize_uans() {
     # SLS info
     SLS_CAN_IP=$(jq -r --arg uan "$uan" '.ExtraProperties.Subnets[] | select(.FullName == "CAN Bootstrap DHCP Subnet") | .IPReservations[] | select(.Comment != null) | select(.Comment | contains($uan)) | .IPAddress' sls_can.json | uniq | tr '\n' ' ')
     if [[ "$SLS_CAN_IP" == "" ]]; then
-      SLS_CAN_IP = "Unknown"
+      SLS_CAN_IP="Unknown"
     fi
     SLS_NAME=$(jq -r --arg uan "$uan" '.ExtraProperties.Subnets[] | select(.FullName == "CAN Bootstrap DHCP Subnet") | .IPReservations[] | select(.Comment != null) | select(.Comment | contains($uan)) | .Name' sls_can.json | tr '\n' ' ')
     if [[ "$SLS_NAME" == "" ]]; then
-      SLS_NAME = "Unknown"
+      SLS_NAME="Unknown"
     fi
 
     # BOS/CFS/IMS info
@@ -121,6 +121,7 @@ function ims_helper() {
   echo "kubectl logs -n ims -f \$IMS_POD -c wait-for-repos"
   echo "kubectl logs -n ims -f \$IMS_POD -c build-image"
   echo "watch -n3 cray ims jobs describe \$IMS_JOB_ID"
+  echo "IMS_IMAGE_ID=\$(cray ims jobs describe $IMS_JOB_ID | jq -r '.resultant_image_id')"
   echo ""
 }
 
@@ -157,23 +158,23 @@ function cfs_helper() {
   echo "CFS_NAME=\$(echo \$CFS_FILE | sed 's/.json//')"
   echo "CFS_GIT_COMMIT=$(git ls-remote https://$VCS_USER:$VCS_PASS@api-gw-service-nmn.local/vcs/cray/uan-config-management.git | grep integration | awk '{print $1}')"
   echo "cat << EOF > \$CFS_FILE
-  {
-    \"layers\": [
-      {
-        \"name\": \"\$CFS_NAME\",
-        \"cloneUrl\": \"https://api-gw-service-nmn.local/vcs/cray/uan-config-management.git\",
-        \"playbook\": \"site.yml\",
-        \"commit\": \"\$CFS_GIT_COMMIT\"
-      }
-    ]
-  }
-  EOF"
+{
+  \"layers\": [
+    {
+      \"name\": \"\$CFS_NAME\",
+      \"cloneUrl\": \"https://api-gw-service-nmn.local/vcs/cray/uan-config-management.git\",
+      \"playbook\": \"site.yml\",
+      \"commit\": \"\$CFS_GIT_COMMIT\"
+    }
+  ]
+}
+EOF"
   
   echo "IMS_IMAGE_ID="
   echo "cray cfs configurations update \$CFS_NAME --file \$CFS_FILE"
   echo "cray cfs sessions create --name \$CFS_NAME --configuration-name \$CFS_NAME --target-definition image --target-group Application_UAN \$IMS_IMAGE_ID"
   
-  echo "cray cfs sessions list | jq -r --arg CFS_CONFIG \"\$CFS_CONFIG\" '.[] | select(.configuration.name | contains(\$CFS_CONFIG)) | {name: .configuration.name, startTime: .status.session.startTime, status: .status.session.status, limit: .ansible.limit, job: .status.session.job}'"
+  echo "cray cfs sessions list | jq -r --arg CFS_NAME \"\$CFS_NAME\" '.[] | select(.configuration.name | contains(\$CFS_NAME)) | {name: .configuration.name, startTime: .status.session.startTime, status: .status.session.status, limit: .ansible.limit, job: .status.session.job}'"
   echo ""
 }
 
