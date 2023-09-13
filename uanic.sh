@@ -179,12 +179,12 @@ EOF"
 }
 
 function set_root_password() {
-  echo "openssl passwd -6 -salt \$(< /dev/urandom tr -dc _A-Z-a-z-0-9 | head -c4) PASSWORD_HERE"
+  echo "openssl passwd -6 -salt \$(< /dev/urandom tr -dc A-Z-a-z-0-9 | head -c4) PASSWORD_HERE"
   echo "kubectl get secrets -n vault cray-vault-unseal-keys -o jsonpath='{.data.vault-root}' | base64 -d; echo"
-  echo "kubectl exec -itn vault cray-vault-0 -- sh"
+  echo "kubectl exec -itn vault cray-vault-0 -c vault -- sh"
   echo "export VAULT_ADDR=http://cray-vault:8200"
   echo "vault login"
-  echo "vault write secret/uan root_password=HASH_FROM_ABOVE"
+  echo "vault write secret/uan root_password='HASH_FROM_ABOVE'"
   echo ""
 }
 
@@ -310,7 +310,7 @@ fi
 
 # Reset getopts index to process the remaining args
 OPTIND=1
-while getopts "hx:va:suicbBg" arg; do
+while getopts "hx:va:suicbBgp" arg; do
   case $arg in
     s)
       summarize_artifacts
